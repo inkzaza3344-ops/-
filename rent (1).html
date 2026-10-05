@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>เก็บค่าห้อง</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3f6f4;--card:#fff;--ink:#1d2b26;--mute:#6b7a73;--line:#dbe4df;--main:#1f6f5c;--ok:#1f6f5c;--warn:#c2410c;--over:#1d4ed8}
+@media(prefers-color-scheme:dark){:root{--bg:#121816;--card:#1b2420;--ink:#e8f0ec;--mute:#93a39b;--line:#2c3933;--main:#4cc2a1;--ok:#4cc2a1;--warn:#fb923c;--over:#7aa2ff}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Sarabun',system-ui,sans-serif;line-height:1.5}
+main{max-width:720px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:1.9rem;font-weight:800;margin:0 0 4px}
+.sub{color:var(--mute);margin:0 0 20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+label{display:block;font-size:.85rem;color:var(--mute);margin-bottom:4px}
+input{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 11px;width:100%}
+input:focus,button:focus-visible{outline:2px solid var(--main);outline-offset:1px}
+.f{flex:1;min-width:120px}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--ink);padding:9px 14px}
+button.p{background:var(--main);border-color:var(--main);color:#fff;font-weight:600}
+.big{font-size:2.2rem;font-weight:800;line-height:1.1}
+.bar{height:10px;background:var(--line);border-radius:6px;overflow:hidden;margin:12px 0 6px}
+.bar i{display:block;height:100%;background:var(--main);transition:width .3s}
+.stats{display:flex;gap:24px;flex-wrap:wrap;color:var(--mute);font-size:.92rem}
+.stats b{color:var(--ink)}
+.item{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.item:first-child{border-top:0}
+.nm{flex:1;min-width:0}
+.nm strong{display:block;font-size:1.05rem}
+.nm span{font-size:.88rem;color:var(--mute)}
+.tag{font-size:.82rem;font-weight:600;padding:2px 10px;border-radius:99px;border:1px solid currentColor;white-space:nowrap}
+.t-ok{color:var(--ok)}.t-warn{color:var(--warn)}.t-over{color:var(--over)}
+.acts{display:flex;gap:6px}
+.acts button{padding:6px 10px;font-size:.88rem}
+.empty{color:var(--mute);text-align:center;padding:20px 0}
+.foot{display:flex;justify-content:space-between;align-items:center;color:var(--mute);font-size:.85rem}
+</style>
+</head>
+<body>
+<main>
+  <h1>เก็บค่าห้อง</h1>
+  <p class="sub">บันทึกว่าใครจ่ายแล้วเท่าไหร่ ข้อมูลเก็บในเบราว์เซอร์เครื่องนี้</p>
+
+  <section class="card">
+    <div class="row">
+      <div class="f"><label for="rent">ค่าห้องต่อคน (บาท)</label><input id="rent" type="number" min="0" value="3000"></div>
+      <div class="f"><label for="month">เดือน</label><input id="month" type="month"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="stats"><span>เก็บได้แล้ว</span></div>
+    <div class="big" id="got">0 บาท</div>
+    <div class="bar"><i id="fill" style="width:0"></i></div>
+    <div class="stats">
+      <span>ยอดที่ต้องเก็บ <b id="need">0</b></span>
+      <span>ค้างอีก <b id="left">0</b></span>
+      <span>จ่ายครบ <b id="done">0/0</b> คน</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="row">
+      <div class="f" style="flex:2"><label for="name">ชื่อ</label><input id="name" placeholder="เช่น นิว"></div>
+      <div class="f"><label for="amt">จ่ายมาแล้ว (บาท)</label><input id="amt" type="number" min="0" value="0"></div>
+      <button class="p" id="add">เพิ่มคน</button>
+    </div>
+  </section>
+
+  <section class="card" id="list"></section>
+
+  <div class="foot"><span>ไฟล์นี้ใช้งานได้โดยไม่ต้องต่ออินเทอร์เน็ต</span><button id="reset">ล้างข้อมูล</button></div>
+</main>
+
+<script>
+const KEY = 'rent-tracker-v1';
+let state = { rent: 3000, month: '', people: [] };
+
+function load(){
+  try { const s = localStorage.getItem(KEY); if (s) state = Object.assign(state, JSON.parse(s)); } catch(e){}
+  if (!state.month) state.month = new Date().toISOString().slice(0,7);
+}
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){} }
+const fmt = n => Number(n).toLocaleString('th-TH');
+const $ = id => document.getElementById(id);
+
+function render(){
+  const rent = state.rent, ppl = state.people;
+  const got = ppl.reduce((s,p)=>s+p.paid,0);
+  const need = rent * ppl.length;
+  const done = ppl.filter(p=>p.paid>=rent).length;
+  $('got').textContent = fmt(got) + ' บาท';
+  $('need').textContent = fmt(need);
+  $('left').textContent = fmt(Math.max(need-got,0));
+  $('done').textContent = done + '/' + ppl.length;
+  $('fill').style.width = need ? Math.min(got/need*100,100)+'%' : '0';
+
+  const list = $('list');
+  if (!ppl.length){ list.innerHTML = '<div class="empty">ยังไม่มีรายชื่อ เพิ่มคนแรกด้านบนได้เลย</div>'; return; }
+  list.innerHTML = '';
+  ppl.forEach((p,i)=>{
+    const diff = rent - p.paid;
+    let cls='t-warn', txt='ค้าง '+fmt(diff)+' บาท';
+    if (diff===0){cls='t-ok';txt='จ่ายครบ';}
+    else if (diff<0){cls='t-over';txt='เกิน '+fmt(-diff)+' บาท';}
+    const el = document.createElement('div');
+    el.className='item';
+    el.innerHTML = '<div class="nm"><strong></strong><span>จ่ายแล้ว '+fmt(p.paid)+' จาก '+fmt(rent)+' บาท</span></div>'
+      + '<span class="tag '+cls+'">'+txt+'</span>'
+      + '<div class="acts"><button data-a="pay" data-i="'+i+'">จ่ายเพิ่ม</button><button data-a="del" data-i="'+i+'" aria-label="ลบ">ลบ</button></div>';
+    el.querySelector('strong').textContent = p.name;
+    list.appendChild(el);
+  });
+}
+
+$('add').onclick = () => {
+  const name = $('name').value.trim();
+  if (!name){ $('name').focus(); return; }
+  state.people.push({ name, paid: Math.max(0, Number($('amt').value)||0) });
+  $('name').value=''; $('amt').value=0; $('name').focus();
+  save(); render();
+};
+$('name').addEventListener('keydown', e => { if (e.key==='Enter') $('add').click(); });
+$('rent').oninput = e => { state.rent = Math.max(0, Number(e.target.value)||0); save(); render(); };
+$('month').onchange = e => { state.month = e.target.value; save(); };
+$('list').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const i = Number(b.dataset.i), p = state.people[i];
+  if (b.dataset.a==='del'){
+    if (confirm('ลบ "'+p.name+'" ออกจากรายชื่อ?')){ state.people.splice(i,1); save(); render(); }
+  } else {
+    const v = prompt('ยอดที่จ่ายเพิ่มของ '+p.name+' (บาท)', state.rent - p.paid > 0 ? state.rent - p.paid : 0);
+    const n = Number(v);
+    if (v!==null && n>0){ p.paid += n; save(); render(); }
+  }
+};
+$('reset').onclick = () => {
+  if (confirm('ล้างข้อมูลทั้งหมดและเริ่มเดือนใหม่?')){ state.people=[]; save(); render(); }
+};
+
+load();
+$('rent').value = state.rent;
+$('month').value = state.month;
+render();
+</script>
+</body>
+</html>
