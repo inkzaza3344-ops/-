@@ -112,14 +112,16 @@ const DB_PATH = '/rent2.json';
      min   = คะแนนขั้นต่ำที่ต้องมีถึงจะได้ยศนี้
      name  = ชื่อยศ    icon = อีโมจิ    color = สีป้าย
    อยากเพิ่มยศ ก็เพิ่มบรรทัดใหม่ในรายการได้เลย */
-const RANK_BY = 'months';
+const RANK_BY = 'total';
 const RANK_UNIT = RANK_BY === 'months' ? 'เดือน' : 'บาท';
 const RANKS = [
-  { min: 0,  name: 'ยาจก',   icon: '🌱', color: '#6b7a73' },
-  { min: 1,  name: 'ขอทาน',    icon: '🏠', color: '#2e8b57' },
-  { min: 3,  name: 'ชาวบ้าน',   icon: '⭐', color: '#d97706' },
-  { min: 6,  name: 'ดยุก',    icon: '💎', color: '#2563eb' },
-  { min: 12, name: 'ราชา',     icon: '👑', color: '#9333ea' },
+  { min: 0,    name: 'ยาจก',    icon: '🥀', color: '#6b7a73' },
+  { min: 200,  name: 'ขอทาน',   icon: '🪙', color: '#92400e' },
+  { min: 500,  name: 'ชาวบ้าน',  icon: '🏠', color: '#2e8b57' },
+  { min: 1000, name: 'ดัชเชส',   icon: '🎀', color: '#db2777' },
+  { min: 1250, name: 'ดยุก',    icon: '💎', color: '#2563eb' },
+  { min: 1500, name: 'ราชินี',   icon: '👸', color: '#9333ea' },
+  { min: 2000, name: 'ราชา',    icon: '👑', color: '#d97706' },
 ];
 // คำนวณคะแนนของแต่ละคน — เปลี่ยนสูตรได้ที่นี่
 function personScore(id){
