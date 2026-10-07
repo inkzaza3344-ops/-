@@ -54,7 +54,7 @@ summary{cursor:pointer;color:var(--mute);font-size:.88rem}
 <body>
 <main>
   <h1>เก็บค่าห้อง</h1>
-  <p class="sub">บันทึกการจ่ายแต่ละครั้ง แยกตามเดือน ข้อมูลเก็บในเบราว์เซอร์เครื่องนี้</p>
+  <p class="sub">บันทึกการจ่ายแต่ละครั้ง แยกตามเดือน ข้อมูลเก็บในเบราว์เซอร์เครื่องนี้ · เวอร์ชัน sync-4</p>
 
   <section class="card">
     <div class="mnav">
@@ -174,27 +174,42 @@ function load(){
   } catch(e){}
   if (!state.month) state.month = nowMonth();
 }
+let dirty = 0; // จำนวนการบันทึกออนไลน์ที่ยังค้างอยู่ ระหว่างนั้นจะไม่ดึงข้อมูลมาทับ
+function errMsg(e){
+  if (e === 401 || e === 403) return 'Firebase ไม่อนุญาต (' + e + ') ไปตั้ง Rules ให้ read/write เป็น true';
+  if (e === 404) return 'ไม่พบฐานข้อมูล ตรวจลิงก์ DB_URL';
+  return 'ออนไลน์ไม่ได้ (' + ((e && e.message) || e) + ')';
+}
 function save(){
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){}
-  if (DB_URL) fetch(DB_URL + DB_PATH, { method:'PUT', body: JSON.stringify(state) })
-    .then(()=>setStatus('บันทึกออนไลน์แล้ว')).catch(()=>setStatus('บันทึกออนไลน์ไม่สำเร็จ ตรวจสอบลิงก์ฐานข้อมูล'));
+  if (!DB_URL) return;
+  dirty++;
+  fetch(DB_URL + DB_PATH, { method:'PUT', body: JSON.stringify(state) })
+    .then(r => { if (!r.ok) throw r.status; setStatus('บันทึกออนไลน์แล้ว'); })
+    .catch(e => setStatus(errMsg(e)))
+    .finally(() => { dirty--; });
 }
 function setStatus(t){ $('status').textContent = t; }
+// stringify แบบเรียงคีย์ เพื่อเทียบข้อมูลโดยไม่สนลำดับ (Firebase เรียงคีย์ใหม่ให้)
+const sj = o => JSON.stringify(o, (k, v) => v && typeof v === 'object' && !Array.isArray(v)
+  ? Object.fromEntries(Object.entries(v).sort(([x],[y]) => x < y ? -1 : 1)) : v);
 async function pull(){
-  if (!DB_URL) return;
+  if (!DB_URL || dirty) return;
   try {
-    const d = await (await fetch(DB_URL + DB_PATH)).json();
-    if (d){
-      const keepMonth = state.month;
-      const n = normalize(d); n.month = keepMonth; // ไม่ดึงเดือนที่กำลังดูอยู่ให้เปลี่ยน
-      if (JSON.stringify(n) !== JSON.stringify(state)){
+    const r = await fetch(DB_URL + DB_PATH);
+    if (!r.ok) throw r.status;
+    const d = await r.json();
+    if (dirty) return;
+    if (d && !d.error){
+      const n = normalize(d); n.month = state.month; // ไม่เปลี่ยนเดือนที่กำลังดูอยู่
+      if (sj(n) !== sj(normalize(state))){
         state = n;
         try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){}
         render();
       }
-    }
+    } else if (!d && state.people.length){ save(); return; } // ฐานข้อมูลว่าง → ส่งข้อมูลในเครื่องขึ้นไป
     setStatus('เชื่อมต่อออนไลน์อยู่ ทุกคนเห็นข้อมูลเดียวกัน');
-  } catch(e){ setStatus('เชื่อมต่อออนไลน์ไม่ได้'); }
+  } catch(e){ setStatus(errMsg(e)); }
 }
 
 const curRent = () => state.rents[state.month] ?? state.rent;
@@ -326,8 +341,9 @@ $('reset').onclick = () => {
 
 load();
 render();
-if (DB_URL){ pull(); setInterval(pull, 5000); }
+if (DB_URL){ pull(); setInterval(pull, 4000); document.addEventListener('visibilitychange', () => { if (!document.hidden) pull(); }); }
 else setStatus('ยังไม่ได้ตั้งค่าออนไลน์ ข้อมูลเก็บในเครื่องนี้เท่านั้น');
 </script>
 </body>
 </html>
+
