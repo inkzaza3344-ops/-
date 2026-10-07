@@ -54,7 +54,7 @@ summary{cursor:pointer;color:var(--mute);font-size:.88rem}
 <body>
 <main>
   <h1>เก็บค่าห้อง</h1>
-  <p class="sub">บันทึกการจ่ายแต่ละครั้ง แยกตามเดือน ข้อมูลเก็บในเบราว์เซอร์เครื่องนี้ · เวอร์ชัน sync-5</p>
+  <p class="sub">บันทึกการจ่ายแต่ละครั้ง แยกตามเดือน ข้อมูลเก็บในเบราว์เซอร์เครื่องนี้ · เวอร์ชัน sync-6</p>
 
   <section class="card">
     <div class="mnav">
@@ -140,6 +140,29 @@ function rankOf(score){
   RANKS.forEach((r, k) => { if (score >= r.min) i = k; });
   return { cur: RANKS[i], next: RANKS[i+1] || null };
 }
+/* ================================================================ */
+
+/* ================= ตั้งค่าพื้นหลัง (แก้ตรงนี้ได้เลย) =================
+   light / dark: พื้นหลังตอนโหมดสว่าง / โหมดมืด (ตามเครื่องของแต่ละคน)
+     ใส่ได้ทุกแบบที่ CSS รองรับ เช่น
+       '#f3f6f4'                                  สีล้วน
+       'linear-gradient(135deg,#ffd6e7,#c9e4ff)'  สีไล่เฉด
+   image: ลิงก์รูปพื้นหลัง (เว้น '' = ไม่ใช้รูป) เช่น 'https://.../bg.jpg' หรือ 'bg.jpg'
+          ถ้าใส่รูป จะแสดงรูปทับสีด้านบน ขยายเต็มจอและไม่เลื่อนตาม
+   สีของการ์ด/ตัวหนังสือแก้ได้ที่ตัวแปร --card --ink ใน :root ด้านบน */
+const BACKGROUND = {
+  light: '#f3f6f4',
+  dark:  '#121816',
+  image: '',
+};
+function applyBackground(){
+  const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const color = dark ? BACKGROUND.dark : BACKGROUND.light;
+  document.body.style.background = BACKGROUND.image
+    ? 'url("' + BACKGROUND.image + '") center / cover fixed no-repeat, ' + color
+    : color;
+}
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyBackground);
 /* ================================================================ */
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
@@ -356,6 +379,7 @@ $('reset').onclick = () => {
 };
 
 load();
+applyBackground();
 render();
 if (DB_URL){ pull(); setInterval(pull, 4000); document.addEventListener('visibilitychange', () => { if (!document.hidden) pull(); }); }
 else setStatus('ยังไม่ได้ตั้งค่าออนไลน์ ข้อมูลเก็บในเครื่องนี้เท่านั้น');
