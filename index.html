@@ -54,7 +54,7 @@ summary{cursor:pointer;color:var(--mute);font-size:.88rem}
 <body>
 <main>
   <h1>เก็บค่าห้อง</h1>
-  <p class="sub">บันทึกการจ่ายแต่ละครั้ง แยกตามเดือน ข้อมูลเก็บในเบราว์เซอร์เครื่องนี้ · เวอร์ชัน sync-4</p>
+  <p class="sub">บันทึกการจ่ายแต่ละครั้ง แยกตามเดือน ข้อมูลเก็บในเบราว์เซอร์เครื่องนี้ · เวอร์ชัน sync-5</p>
 
   <section class="card">
     <div class="mnav">
@@ -75,6 +75,7 @@ summary{cursor:pointer;color:var(--mute);font-size:.88rem}
     <div class="stats">
       <span>ยอดที่ต้องเก็บ <b id="need">0</b></span>
       <span>ค้างอีก <b id="left">0</b></span>
+      <span>ยกมาจากเดือนก่อน <b id="carry">0</b></span>
       <span>จ่ายครบ <b id="done">0/0</b> คน</span>
     </div>
   </section>
@@ -215,8 +216,22 @@ async function pull(){
 const curRent = () => state.rents[state.month] ?? state.rent;
 const pays = id => ((state.pay[state.month]||{})[id]) || [];
 const paidOf = id => pays(id).reduce((s,x)=>s+x.a, 0);
+// ---- เงินเกินยกไปเดือนถัดไป ----
+const rentOf = m => state.rents[m] ?? state.rent;
+const paidIn = (m, id) => (((state.pay[m]||{})[id]) || []).reduce((s,x)=>s+x.a, 0);
+function nextM(m){ const [y,mo] = m.split('-').map(Number); const d = new Date(y, mo, 1); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'); }
+// เครดิตที่ยกมาเข้าเดือน month = เงินเกินสะสมจากเดือนก่อน ๆ (หักค่าห้องแต่ละเดือนแล้ว) ส่วนที่ค้างไม่ยกไปทบ
+function creditIn(id, month){
+  const ms = Object.keys(state.pay).filter(m => paidIn(m, id) > 0).sort();
+  if (!ms.length || ms[0] >= month) return 0;
+  let c = 0, m = ms[0], n = 0;
+  while (m < month && n++ < 600){ c = Math.max(0, c + paidIn(m, id) - rentOf(m)); m = nextM(m); }
+  return c;
+}
+const totalOf = id => paidOf(id) + creditIn(id, state.month);
 function addPay(id, a){
   const m = state.month;
+  state.rents[m] = state.rents[m] ?? state.rent; // ล็อกค่าห้องของเดือนนี้ไว้ ไม่ให้เปลี่ยนตามเดือนอื่น
   state.pay[m] = state.pay[m] || {};
   (state.pay[m][id] = state.pay[m][id] || []).push({ a, t: Date.now() });
 }
@@ -239,9 +254,10 @@ function render(){
   if (document.activeElement !== $('rent')) $('rent').value = curRent();
 
   const rent = curRent(), ppl = state.people;
-  const got = ppl.reduce((s,p)=>s+paidOf(p.id),0);
+  const got = ppl.reduce((s,p)=>s+totalOf(p.id),0);
+  $('carry').textContent = fmt(ppl.reduce((s,p)=>s+creditIn(p.id,state.month),0));
   const need = rent * ppl.length;
-  const done = ppl.filter(p=>paidOf(p.id)>=rent).length;
+  const done = ppl.filter(p=>totalOf(p.id)>=rent).length;
   $('got').textContent = fmt(got) + ' บาท';
   $('need').textContent = fmt(need);
   $('left').textContent = fmt(Math.max(need-got,0));
@@ -252,13 +268,13 @@ function render(){
   if (!ppl.length){ list.innerHTML = '<div class="empty">ยังไม่มีรายชื่อ เพิ่มคนแรกด้านบนได้เลย</div>'; return; }
   list.innerHTML = '';
   ppl.forEach(p => {
-    const paid = paidOf(p.id), diff = rent - paid, hist = pays(p.id);
+    const paid = paidOf(p.id), cr = creditIn(p.id, state.month), diff = rent - paid - cr, hist = pays(p.id);
     let cls='t-warn', txt='ค้าง '+fmt(diff)+' บาท';
     if (diff===0){cls='t-ok';txt='จ่ายครบ';}
-    else if (diff<0){cls='t-over';txt='เกิน '+fmt(-diff)+' บาท';}
+    else if (diff<0){cls='t-over';txt='เกิน '+fmt(-diff)+' บาท (ยกไปเดือนหน้า)';}
     const el = document.createElement('div');
     el.className = 'item';
-    el.innerHTML = '<div class="top"><div class="nm"><strong></strong><span>จ่ายแล้ว '+fmt(paid)+' จาก '+fmt(rent)+' บาท</span></div>'
+    el.innerHTML = '<div class="top"><div class="nm"><strong></strong><span>จ่ายแล้ว '+fmt(paid)+(cr ? ' + ยกมา '+fmt(cr) : '')+' จาก '+fmt(rent)+' บาท</span></div>'
       + '<span class="tag '+cls+'">'+txt+'</span>'
       + '<div class="acts"><button data-a="pay" data-id="'+p.id+'">จ่ายเพิ่ม</button><button data-a="del" data-id="'+p.id+'" aria-label="ลบคน">ลบ</button></div></div>'
       + '<details'+(open.has(p.id)?' open':'')+' data-id="'+p.id+'"><summary>ประวัติการจ่าย ('+hist.length+' ครั้ง)</summary><div class="hl"></div></details>';
@@ -327,7 +343,7 @@ $('list').onclick = e => {
       state.pay[state.month][id].splice(k,1); save(); render();
     }
   } else {
-    const left = curRent() - paidOf(id);
+    const left = curRent() - totalOf(id);
     const v = prompt('ยอดที่จ่ายเพิ่มของ '+p.name+' (บาท)', left > 0 ? left : 0);
     const n = Number(v);
     if (v!==null && n>0){ addPay(id, n); open.add(id); save(); render(); }
@@ -346,4 +362,3 @@ else setStatus('ยังไม่ได้ตั้งค่าออนไล�
 </script>
 </body>
 </html>
-
